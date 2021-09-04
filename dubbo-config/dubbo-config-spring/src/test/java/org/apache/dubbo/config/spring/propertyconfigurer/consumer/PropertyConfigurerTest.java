@@ -17,10 +17,11 @@
 package org.apache.dubbo.config.spring.propertyconfigurer.consumer;
 
 import org.apache.dubbo.config.bootstrap.DubboBootstrap;
-import org.apache.dubbo.config.spring.ZooKeeperServer;
 import org.apache.dubbo.config.spring.api.HelloService;
 import org.apache.dubbo.config.spring.context.annotation.EnableDubbo;
-import org.apache.dubbo.rpc.model.ApplicationModel;
+import org.apache.dubbo.config.spring.registrycenter.RegistryCenter;
+import org.apache.dubbo.config.spring.registrycenter.ZookeeperSingleRegistryCenter;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -29,15 +30,23 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ImportResource;
-import org.springframework.context.annotation.PropertySource;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 public class PropertyConfigurerTest {
 
+    private static RegistryCenter singleRegistryCenter;
+
     @BeforeAll
-    public static void setUp() {
+    public static void beforeAll() {
+        singleRegistryCenter = new ZookeeperSingleRegistryCenter();
+        singleRegistryCenter.startup();
         DubboBootstrap.reset();
-        ZooKeeperServer.start();
+    }
+
+    @AfterAll
+    public static void afterAll() {
+        DubboBootstrap.reset();
+        singleRegistryCenter.shutdown();
     }
 
     @Test
@@ -47,8 +56,7 @@ public class PropertyConfigurerTest {
         try {
             providerContext.start();
 
-            // clear config manager
-            //ApplicationModel.getConfigManager().clear();
+            // reset ConfigManager of provider context
             DubboBootstrap.reset(false);
 
             try {
@@ -56,6 +64,7 @@ public class PropertyConfigurerTest {
             } catch (InterruptedException e) {
             }
 
+            // Resolve placeholder by PropertyPlaceholderConfigurer in dubbo-consumer.xml, without import property source.
             AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(ConsumerConfiguration.class);
             context.start();
 
@@ -76,7 +85,6 @@ public class PropertyConfigurerTest {
     @EnableDubbo(scanBasePackages = "org.apache.dubbo.config.spring.propertyconfigurer.consumer")
     @ComponentScan(value = {"org.apache.dubbo.config.spring.propertyconfigurer.consumer"})
     @ImportResource("classpath:/org/apache/dubbo/config/spring/propertyconfigurer/consumer/dubbo-consumer.xml")
-    @PropertySource("classpath:/org/apache/dubbo/config/spring/propertyconfigurer/consumer/app.properties")
     static class ConsumerConfiguration {
         @Bean
         public DemoBeanFactoryPostProcessor bizBeanFactoryPostProcessor(HelloService service) {
